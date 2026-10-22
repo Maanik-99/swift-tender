@@ -1,0 +1,83 @@
+[
+  {
+    "id": "1",
+    "title": "Procurement of Core Banking Server Upgrade for Mock Bank",
+    "bank": "Demo Commercial Bank PLC",
+    "deadline": "2026-11-15",
+    "link": "http://127.0.0.1:5000/tender/1",
+    "description": "Supply and installation of enterprise database servers.",
+    "created_at": "2026-10-21 01:52:40"
+  },
+  {
+    "id": "2",
+    "title": "Appointment of Certified Cybersecurity Firm for SWIFT CSCF Independent Security Assessment",
+    "bank": "Bangladesh Bank",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/2",
+    "description": "Central bank seeks independent cybersecurity assessors for comprehensive SWIFT CSCF audit and compliance verification.",
+    "created_at": "2026-10-21 01:52:50"
+  },
+  {
+    "id": "3",
+    "title": "Request for Proposal (RFP) for SWIFT Customer Security Programme (CSP) Assessment",
+    "bank": "Dutch-Bangla Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/3",
+    "description": "Inviting proposals from eligible audit and cybersecurity firms to perform the mandatory independent assessment for SWIFT CSP CSCF controls.",
+    "created_at": "2026-10-21 22:10:12"
+  },
+  {
+    "id": "4",
+    "title": "Procurement of 500 Units Laser Printers and Office Paper Shredders",
+    "bank": "Sonali Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/4",
+    "description": "Tender for the supply and maintenance of brand new office peripherals and stationery.",
+    "created_at": "2026-10-22 00:12:59"
+  },
+  {
+    "id": "5",
+    "title": "swift",
+    "bank": "Sonali Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/5",
+    "description": "swift",
+    "created_at": "2026-10-22 00:13:38"
+  },
+  {
+    "id": "6",
+    "title": "cybersecurity assessment",
+    "bank": "Sonali Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/6",
+    "description": "cybersecurity assessment\r\n",
+    "created_at": "2026-10-22 00:14:24"
+  },
+  {
+    "id": "7",
+    "title": "Appointment of Certified Cybersecurity Firm for SWIFT CSCF Independent Security Assessment",
+    "bank": "Bangladesh Bank",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/7",
+    "description": "Central bank seeks independent cybersecurity assessors for comprehensive SWIFT CSCF audit and compliance verification.",
+    "created_at": "2026-10-22 00:15:05"
+  },
+  {
+    "id": "8",
+    "title": "swift environment",
+    "bank": "Sonali Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/8",
+    "description": "swift environment\r\n",
+    "created_at": "2026-10-22 00:16:35"
+  },
+  {
+    "id": "9",
+    "title": "tst csp",
+    "bank": "Sonali Bank PLC",
+    "deadline": "2026-11-30",
+    "link": "http://127.0.0.1:5000/tender/9",
+    "description": "test tender",
+    "created_at": "2026-10-22 14:55:10"
+  }
+]
