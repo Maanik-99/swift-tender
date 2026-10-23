@@ -235,7 +235,7 @@ def scrape_all_tenders():
         prefix = f"[{idx}/{total_portals}] {bank_name}"
 
         try:
-            res = requests.get(tender_portal_url, headers=headers, timeout=10, verify=False)
+            res = requests.get(tender_portal_url, headers=headers, timeout=5, verify=False)
             
             if res.status_code != 200:
                 print(f"  🌐 {prefix} -> ⚠️ [HTTP {res.status_code}] ({tender_portal_url})", flush=True)
