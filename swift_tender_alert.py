@@ -31,6 +31,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD", "")
 RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL", "")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
@@ -400,9 +401,6 @@ def send_instant_email(tenders):
                         </td>
                     </tr>
         """
-        # Save to CSV immediately so it's NEVER sent twice
-        dedup_ref = t.get('dedup_key', t['link'])
-        mark_as_seen(t['title'], dedup_ref, t['source'], score)
 
     html_content += """
                 </table>
@@ -419,15 +417,71 @@ def send_instant_email(tenders):
 
     msg.attach(MIMEText(html_content, 'html'))
 
-    try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, [email.strip() for email in RECEIVER_EMAIL.split(',')], msg.as_string())
-        server.quit()
-        print(f"🎉 [SUCCESS] ইমেইল অ্যালার্ট সফলভাবে {RECEIVER_EMAIL} এ পাঠানো হয়েছে!\n")
-    except Exception as e:
-        print(f"❌ [ERROR] Email sending failed: {e}\n")
+    receiver_list = [email.strip() for email in RECEIVER_EMAIL.split(',') if email.strip()]
+    sent = False
+
+    # Method 1: Resend HTTP API (Recommended for Cloud / Render - No Port Blocking)
+    if RESEND_API_KEY:
+        try:
+            print("  📨 Dispatching email via Resend HTTPS API...", flush=True)
+            resend_url = "https://api.resend.com/emails"
+            resend_headers = {
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            # Resend default free sender is "onboarding@resend.dev"
+            sender_addr = "Swift Tender Alert <onboarding@resend.dev>" if ("@" not in SENDER_EMAIL or "gmail" in SENDER_EMAIL) else SENDER_EMAIL
+
+            resend_payload = {
+                "from": sender_addr,
+                "to": receiver_list,
+                "subject": msg['Subject'],
+                "html": html_content
+            }
+            response = requests.post(resend_url, headers=resend_headers, json=resend_payload, timeout=15)
+            if response.status_code in (200, 201):
+                sent = True
+                print(f"🎉 [SUCCESS] Email alert sent successfully via Resend API to {RECEIVER_EMAIL}!\n", flush=True)
+            else:
+                print(f"  ⚠️ Resend API responded with {response.status_code}: {response.text}", flush=True)
+        except Exception as re_err:
+            print(f"  ⚠️ Resend API failed: {re_err}. Falling back to standard SMTP...", flush=True)
+
+    # Method 2: Standard TLS SMTP (Port 587)
+    if not sent and SENDER_PASSWORD:
+        try:
+            print(f"  ✉️ Connecting to {SMTP_SERVER}:{SMTP_PORT} (TLS)...", flush=True)
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=20)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server.sendmail(SENDER_EMAIL, receiver_list, msg.as_string())
+            server.quit()
+            sent = True
+            print(f"🎉 [SUCCESS] Email alert sent successfully to {RECEIVER_EMAIL}!\n", flush=True)
+        except Exception as e1:
+            print(f"  ⚠️ TLS (Port {SMTP_PORT}) failed: {e1}. Retrying with SSL (Port 465)...", flush=True)
+
+    # Method 3: Fallback to SSL (Port 465)
+    if not sent and SENDER_PASSWORD:
+        try:
+            print(f"  ✉️ Connecting to {SMTP_SERVER}:465 (SSL)...", flush=True)
+            server_ssl = smtplib.SMTP_SSL(SMTP_SERVER, 465, timeout=20)
+            server_ssl.ehlo()
+            server_ssl.login(SENDER_EMAIL, SENDER_PASSWORD)
+            server_ssl.sendmail(SENDER_EMAIL, receiver_list, msg.as_string())
+            server_ssl.quit()
+            sent = True
+            print(f"🎉 [SUCCESS] Email alert sent successfully via SSL to {RECEIVER_EMAIL}!\n", flush=True)
+        except Exception as e2:
+            print(f"❌ [ERROR] Email sending completely failed: {e2}\n", flush=True)
+
+    # Mark as seen in CSV ONLY if email was successfully sent
+    if sent:
+        for t in tenders:
+            dedup_ref = t.get('dedup_key', t['link'])
+            mark_as_seen(t['title'], dedup_ref, t['source'], t.get('relevance_score', 100))
 
 # --- Main Scan & Evaluate Pipeline ---
 def run_scan_cycle():
