@@ -3,10 +3,11 @@ import subprocess
 import sys
 import os
 
-INTERVAL_SECONDS = 30  # প্রতি ৩০ সেকেন্ড পর পর সব পোর্টাল চেক করবে
+# প্রতি কত সেকেন্ড পর পর সব পোর্টাল চেক করবে (Render Environment Variable দিয়েও কন্ট্রোল করা যাবে)
+INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "300"))  # Default 300s (5 minutes)
 
 print(f"🔄 SWIFT Tender Always-On Daemon started.")
-print(f"⏱️ Scanning banks & test portal every {INTERVAL_SECONDS} seconds...")
+print(f"⏱️ Scanning banks & test portal every {INTERVAL_SECONDS} seconds ({round(INTERVAL_SECONDS/60, 1)} minutes)...")
 print(f"Press Ctrl+C anytime to stop.\n")
 
 script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "swift_tender_alert.py")

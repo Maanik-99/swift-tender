@@ -234,14 +234,12 @@ def scrape_all_tenders():
         prefix = f"[{idx}/{total_portals}] {bank_name}"
 
         try:
-            print(f"  🌐 {prefix} -> Connecting to {tender_portal_url} ...", end=" ", flush=True)
-            res = requests.get(tender_portal_url, headers=headers, timeout=12, verify=False)
+            res = requests.get(tender_portal_url, headers=headers, timeout=10, verify=False)
             
             if res.status_code != 200:
-                print(f"⚠️ [HTTP {res.status_code}]")
+                print(f"  🌐 {prefix} -> ⚠️ [HTTP {res.status_code}] ({tender_portal_url})", flush=True)
                 continue
 
-            print("✅ OK", end=" | ", flush=True)
             soup = BeautifulSoup(res.text, 'html.parser')
 
             # 1. Local Mock Portal Sandbox (Test each newly added mock tender individually)
@@ -276,9 +274,9 @@ def scrape_all_tenders():
                                 mark_as_seen(title, href, bank_name, eval_res.get('relevance_score', 0))
 
                 if found_in_mock > 0:
-                    print(f"🎯 Found {found_in_mock} NEW relevant tender(s)!")
+                    print(f"  🌐 {prefix} -> 🎯 Found {found_in_mock} NEW relevant tender(s)!", flush=True)
                 else:
-                    print(f"🔍 Checked {len(mock_items)} mock items (No new matching tenders)")
+                    print(f"  🌐 {prefix} -> 🔍 Checked {len(mock_items)} mock items (No new matching tenders)", flush=True)
                 continue
 
             # 2. Live Bank Portals (Check whole page for desired SWIFT / Cyber keywords)
@@ -329,18 +327,18 @@ def scrape_all_tenders():
                         'ai_summary': f"Keyword '{matched_keyword}' found on portal. {context_snippet}",
                         'is_mock': is_mock
                     })
-                    print(f"🎯 MATCH FOUND: '{matched_keyword}' (Category: {category})")
+                    print(f"  🌐 {prefix} -> 🎯 MATCH FOUND: '{matched_keyword}' ({category})", flush=True)
                 else:
-                    print(f"ℹ️ Keyword '{matched_keyword}' present (already reported)")
+                    print(f"  🌐 {prefix} -> ℹ️ Keyword '{matched_keyword}' present (already reported)", flush=True)
             else:
-                print("⚪ No matching SWIFT/Cyber tenders")
+                print(f"  🌐 {prefix} -> ⚪ Checked (No matching SWIFT/Cyber tenders)", flush=True)
 
         except requests.exceptions.Timeout:
-            print(f"⏱️ Connection Timeout (Site slow or down)")
+            print(f"  🌐 {prefix} -> ⏱️ Timeout (Site slow or down)", flush=True)
         except requests.exceptions.ConnectionError:
-            print(f"❌ Connection Failed (Unreachable)")
+            print(f"  🌐 {prefix} -> ❌ Connection Failed (Unreachable)", flush=True)
         except Exception as e:
-            print(f"⚠️ Scan error: {e}")
+            print(f"  🌐 {prefix} -> ⚠️ Scan error: {e}", flush=True)
 
     return new_tenders
 
