@@ -15,13 +15,24 @@ iteration = 1
 while True:
     print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🔍 Starting scan #{iteration}...")
     try:
-        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, encoding='utf-8')
-        if result.stdout:
-            for line in result.stdout.strip().split("\n"):
-                print(f"  {line}")
-        if result.stderr:
-            for line in result.stderr.strip().split("\n"):
-                if "InsecureRequestWarning" not in line:
+        process = subprocess.Popen(
+            [sys.executable, "-u", script_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8',
+            bufsize=1
+        )
+        for line in iter(process.stdout.readline, ''):
+            if line:
+                print(f"  {line.rstrip()}")
+        process.stdout.close()
+        return_code = process.wait()
+
+        stderr_output = process.stderr.read()
+        if stderr_output:
+            for line in stderr_output.strip().split("\n"):
+                if "InsecureRequestWarning" not in line and line.strip():
                     print(f"  [ERROR] {line}")
     except Exception as e:
         print(f"Scan execution error: {e}")

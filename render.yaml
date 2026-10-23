@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: swift-tender-alert
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python start.py
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"

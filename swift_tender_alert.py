@@ -79,81 +79,66 @@ def mark_as_seen(title, link, source="", relevance_score=0):
             datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         ])
 
-# --- Target Bank & Mock Portals ---
-BANK_PORTALS = [
-    {
-        "name": "Local Mock Bank Portal (Live Testing Sandbox)",
-        "url": "http://127.0.0.1:5000",
-        "base_url": "http://127.0.0.1:5000",
-        "is_mock": True
-    },
-    {
-        "name": "Bangladesh Bank (Procurements Underway)",
-        "url": "https://www.bb.org.bd/en/index.php/about/tenders",
-        "base_url": "https://www.bb.org.bd",
-        "is_mock": False
-    },
-    {
-        "name": "National e-GP Portal (Public Banks & Gov)",
-        "url": "https://www.eprocure.gov.bd",
-        "base_url": "https://www.eprocure.gov.bd",
-        "is_mock": False
-    },
-    {
-        "name": "Sonali Bank PLC",
-        "url": "https://www.sonalibank.com.bd/tender.php",
-        "base_url": "https://www.sonalibank.com.bd",
-        "is_mock": False
-    },
-    {
-        "name": "Islami Bank Bangladesh PLC",
-        "url": "https://www.islamibankbd.com/tender-notice",
-        "base_url": "https://www.islamibankbd.com",
-        "is_mock": False
-    },
-    {
-        "name": "Dutch-Bangla Bank PLC",
-        "url": "https://www.dutchbanglabank.com/tender/tender.html",
-        "base_url": "https://www.dutchbanglabank.com/tender/",
-        "is_mock": False
-    },
-    {
-        "name": "Prime Bank PLC",
-        "url": "https://www.primebank.com.bd/tender",
-        "base_url": "https://www.primebank.com.bd",
-        "is_mock": False
-    },
-    {
-        "name": "City Bank PLC",
-        "url": "https://www.thecitybank.com/eoi",
-        "base_url": "https://www.thecitybank.com",
-        "is_mock": False
-    },
-    {
-        "name": "BRAC Group e-Tender",
-        "url": "https://tender.brac.net",
-        "base_url": "https://tender.brac.net",
-        "is_mock": False
-    },
-    {
-        "name": "Social Islami Bank PLC (SIBL)",
-        "url": "https://www.siblbd.com/about/tender",
-        "base_url": "https://www.siblbd.com",
-        "is_mock": False
-    },
-    {
-        "name": "Reserve Bank of India (RBI)",
-        "url": "https://www.rbi.org.in/Scripts/BS_ViewTenders.aspx",
-        "base_url": "https://www.rbi.org.in",
-        "is_mock": False
-    },
-    {
-        "name": "State Bank of India (SBI)",
-        "url": "https://sbi.co.in/web/sbi-in-the-news/procurement-news",
-        "base_url": "https://sbi.co.in",
-        "is_mock": False
-    }
-]
+# --- Target Bank & Mock Portals Registry (Loaded from bank_portals.json) ---
+PORTALS_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_portals.json")
+
+def load_bank_portals():
+    """Dynamically loads bank and tender portal registry from bank_portals.json."""
+    if os.path.exists(PORTALS_JSON_PATH):
+        try:
+            with open(PORTALS_JSON_PATH, mode="r", encoding="utf-8") as f:
+                data = json.load(f)
+                banks = data.get("banks", [])
+                portals = []
+                for b in banks:
+                    if b.get("status", "active") == "active":
+                        is_mock_item = b.get("is_mock", False)
+                        p_url = b.get("tender_url")
+                        p_base = b.get("base_url")
+
+                        # Cloud compatibility: if mock portal, allow dynamic port or external cloud URL
+                        if is_mock_item:
+                            cloud_mock_url = os.getenv("MOCK_PORTAL_URL")
+                            port_env = os.getenv("PORT", "5000")
+                            if cloud_mock_url:
+                                p_url = cloud_mock_url.rstrip("/")
+                                p_base = cloud_mock_url.rstrip("/")
+                            elif "127.0.0.1" in str(p_url) or "localhost" in str(p_url):
+                                p_url = f"http://127.0.0.1:{port_env}"
+                                p_base = f"http://127.0.0.1:{port_env}"
+
+                        portals.append({
+                            "id": b.get("id"),
+                            "name": b.get("name"),
+                            "url": p_url,
+                            "base_url": p_base,
+                            "country": b.get("country"),
+                            "category": b.get("category"),
+                            "is_mock": is_mock_item
+                        })
+                if portals:
+                    return portals
+        except Exception as e:
+            print(f"[WARN] Failed to read bank_portals.json, using built-in list: {e}")
+
+    # Fallback to defaults
+    return [
+        {
+            "name": "Local Mock Bank Portal (Live Testing Sandbox)",
+            "url": "http://127.0.0.1:5000",
+            "base_url": "http://127.0.0.1:5000",
+            "is_mock": True
+        },
+        {
+            "name": "Bangladesh Bank (Procurements Underway)",
+            "url": "https://www.bb.org.bd/en/index.php/about/tenders",
+            "base_url": "https://www.bb.org.bd",
+            "is_mock": False
+        }
+    ]
+
+BANK_PORTALS = load_bank_portals()
+
 
 # --- AI & Smart Keyword Engine ---
 SWIFT_KEYWORDS = [
@@ -219,30 +204,51 @@ def evaluate_tender_smart(title, snippet="", source="", is_mock=False):
         "ai_reasoning": "Unrelated bank tender (Not related to SWIFT/Cybersecurity assessment)."
     }
 
-# --- Scraper Engine ---
+# --- Scraper Engine (Direct Bank Portal & Full-Page Keyword Scanner) ---
+def find_keyword_context(full_text, keyword, window=160):
+    """Extracts a readable snippet around the matched keyword."""
+    idx = full_text.lower().find(keyword.lower())
+    if idx == -1:
+        return f"Keyword '{keyword}' matched on tender portal."
+    start = max(0, idx - 60)
+    end = min(len(full_text), idx + window)
+    snippet = full_text[start:end].replace('\n', ' ').strip()
+    return f"...{snippet}..."
+
 def scrape_all_tenders():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
     }
 
     new_tenders = []
+    total_portals = len(BANK_PORTALS)
+    print(f"📡 Scanning {total_portals} registered portals for SWIFT & Cyber Security tenders...")
 
-    for bank in BANK_PORTALS:
-        bank_name = bank['name']
-        url = bank['url']
+    for idx, bank in enumerate(BANK_PORTALS, 1):
+        bank_name = bank.get('name', 'Unknown Bank')
+        tender_portal_url = bank.get('url', '')
+        country = bank.get('country', '')
         is_mock = bank.get('is_mock', False)
+        prefix = f"[{idx}/{total_portals}] {bank_name}"
 
         try:
-            res = requests.get(url, headers=headers, timeout=12, verify=False)
+            print(f"  🌐 {prefix} -> Connecting to {tender_portal_url} ...", end=" ", flush=True)
+            res = requests.get(tender_portal_url, headers=headers, timeout=12, verify=False)
+            
             if res.status_code != 200:
+                print(f"⚠️ [HTTP {res.status_code}]")
                 continue
 
+            print("✅ OK", end=" | ", flush=True)
             soup = BeautifulSoup(res.text, 'html.parser')
 
-            # 1. Local Mock Portal scraper
+            # 1. Local Mock Portal Sandbox (Test each newly added mock tender individually)
             if is_mock:
-                for item in soup.find_all('div', class_='tender-item'):
+                mock_items = soup.find_all('div', class_='tender-item')
+                found_in_mock = 0
+                for item in mock_items:
                     a_elem = item.find('a', class_='tender-link')
                     if a_elem and a_elem.get('href'):
                         href = a_elem['href'].strip()
@@ -250,64 +256,91 @@ def scrape_all_tenders():
                         desc_elem = item.find('div', style=lambda v: v and 'color: #475569' in v)
                         desc = desc_elem.get_text(strip=True) if desc_elem else ""
 
+                        # If not already alerted for this specific mock tender
                         if not is_already_seen(href):
-                            new_tenders.append({
-                                'title': title,
-                                'link': href,
-                                'snippet': desc,
-                                'source': bank_name,
-                                'is_mock': True
-                            })
-
-            # 2. Bangladesh Bank scraper
-            elif "bb.org.bd" in url:
-                table = soup.find('table')
-                if table:
-                    for tr in table.find_all('tr')[1:]:
-                        tds = [td.get_text(separator=' ', strip=True) for td in tr.find_all('td')]
-                        if len(tds) >= 4 and 'no data available' not in tds[0].lower():
-                            a_elem = tr.find('a', attrs={'pdf-link': True}) or tr.find('a', href=True)
-                            pdf = a_elem.get('pdf-link') or a_elem.get('href') if a_elem else ""
-                            if pdf and not is_already_seen(pdf):
+                            eval_res = evaluate_tender_smart(title, desc, bank_name, is_mock=True)
+                            if eval_res.get('is_relevant'):
+                                found_in_mock += 1
                                 new_tenders.append({
-                                    'title': tds[3].replace('details...', '').strip(),
-                                    'link': pdf,
-                                    'snippet': f"Published: {tds[1]} | Closes: {tds[2]}",
-                                    'source': bank_name,
-                                    'is_mock': False
+                                    'title': title,
+                                    'link': href,
+                                    'dedup_key': href,
+                                    'snippet': desc if desc else title,
+                                    'source': f"{bank_name} ({country})",
+                                    'relevance_score': eval_res.get('relevance_score', 100),
+                                    'ai_summary': eval_res.get('summary', desc),
+                                    'is_mock': True
                                 })
+                            else:
+                                # Mark irrelevant mock items so they don't re-trigger
+                                mark_as_seen(title, href, bank_name, eval_res.get('relevance_score', 0))
 
-            # 3. Other bank portals (Search specifically for tenders, procurement, RFPs)
+                if found_in_mock > 0:
+                    print(f"🎯 Found {found_in_mock} NEW relevant tender(s)!")
+                else:
+                    print(f"🔍 Checked {len(mock_items)} mock items (No new matching tenders)")
+                continue
+
+            # 2. Live Bank Portals (Check whole page for desired SWIFT / Cyber keywords)
+            # Extract clean page text
+            for script_or_style in soup(['script', 'style', 'nav', 'footer']):
+                script_or_style.decompose()
+
+            page_text = soup.get_text(separator=' ', strip=True)
+            page_text_lower = page_text.lower()
+
+            # Check SWIFT top-priority keywords
+            matched_keyword = None
+            category = "SWIFT Security Audit"
+            score = 100
+
+            for kw in SWIFT_KEYWORDS:
+                if kw in page_text_lower:
+                    matched_keyword = kw
+                    category = "SWIFT CSP / CSCF Assessment"
+                    score = 100
+                    break
+
+            # Check related Cybersecurity & IS Audit keywords if not SWIFT
+            if not matched_keyword:
+                for kw in RELATED_IS_AUDIT_KEYWORDS:
+                    if kw in page_text_lower:
+                        matched_keyword = kw
+                        category = "Cybersecurity & Bank IS Audit"
+                        score = 85
+                        break
+
+            # If our desired keyword matched on this bank's portal
+            if matched_keyword:
+                context_snippet = find_keyword_context(page_text, matched_keyword)
+                
+                # Deduplication key is the tender_portal_url + keyword to avoid re-alerting unless new keyword
+                dedup_key = f"{tender_portal_url}#{matched_keyword}"
+
+                if not is_already_seen(dedup_key):
+                    title = f"[{country}] {bank_name} - {category} (Matched: '{matched_keyword.upper()}')"
+                    new_tenders.append({
+                        'title': title,
+                        'link': tender_portal_url,
+                        'dedup_key': dedup_key,
+                        'snippet': f"Matched Keyword: '{matched_keyword}'. Context: {context_snippet}",
+                        'source': f"{bank_name} ({country})",
+                        'relevance_score': score,
+                        'ai_summary': f"Keyword '{matched_keyword}' found on portal. {context_snippet}",
+                        'is_mock': is_mock
+                    })
+                    print(f"🎯 MATCH FOUND: '{matched_keyword}' (Category: {category})")
+                else:
+                    print(f"ℹ️ Keyword '{matched_keyword}' present (already reported)")
             else:
-                seen_on_bank = set()
-                # Scrape up to top 10 current notices per bank page
-                for a in soup.find_all('a', href=True):
-                    txt = a.get_text(separator=' ', strip=True)
-                    href = a['href'].strip()
-                    txt_lower = txt.lower()
+                print("⚪ No matching SWIFT/Cyber tenders")
 
-                    is_notice = any(k in txt_lower for k in ['tender', 'rfp', 'eoi', 'quotation', 'procurement', 'notice', 'corrigendum'])
-                    is_noise = any(n in txt_lower for n in ['home', 'login', 'about us', 'contact', 'career', 'privacy', 'terms', 'all rights', 'sitemap', 'faqs'])
-
-                    if is_notice and not is_noise and len(txt) > 15:
-                        if href and not href.startswith('#') and not href.startswith('javascript'):
-                            clean_href = href.split('?')[0]
-                            full = clean_href if clean_href.startswith('http') else bank['base_url'].rstrip('/') + '/' + clean_href.lstrip('/')
-                            if full not in seen_on_bank:
-                                seen_on_bank.add(full)
-                                if not is_already_seen(full):
-                                    new_tenders.append({
-                                        'title': txt[:140],
-                                        'link': full,
-                                        'snippet': f"Active tender notice on {bank_name} procurement portal",
-                                        'source': bank_name,
-                                        'is_mock': False
-                                    })
-                                if len(seen_on_bank) >= 10:
-                                    break
-
+        except requests.exceptions.Timeout:
+            print(f"⏱️ Connection Timeout (Site slow or down)")
+        except requests.exceptions.ConnectionError:
+            print(f"❌ Connection Failed (Unreachable)")
         except Exception as e:
-            pass
+            print(f"⚠️ Scan error: {e}")
 
     return new_tenders
 
@@ -328,7 +361,7 @@ def send_instant_email(tenders):
 
     msg = MIMEMultipart()
     first_title = tenders[0]['title'][:40]
-    msg['Subject'] = f"🚨 নতুন টেন্ডার অ্যালার্ট: {len(tenders)}টি নতুন টেন্ডার প্রকাশিত হয়েছে! ({first_title}...)"
+    msg['Subject'] = f"🚨 Tender Alert: {len(tenders)} New Tender Notice(s) Found! ({first_title}...)"
     msg['From'] = SENDER_EMAIL
     msg['To'] = RECEIVER_EMAIL
 
@@ -338,9 +371,9 @@ def send_instant_email(tenders):
         <div style="max-width: 850px; margin: 0 auto; background: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #e2e8f0;">
             
             <div style="background: linear-gradient(135deg, #0d47a1, #1e88e5); color: #ffffff; padding: 22px;">
-                <h2 style="margin: 0; font-size: 22px;">⚡ নতুন টেন্ডার নোটিফিকেশন অ্যালার্ট</h2>
+                <h2 style="margin: 0; font-size: 22px;">⚡ New Tender Notification Alert</h2>
                 <p style="margin: 6px 0 0 0; opacity: 0.95; font-size: 14px;">
-                    পোর্টালে নতুন টেন্ডার প্রকাশিত হওয়ার সাথে সাথে স্বয়ংক্রিয়ভাবে প্রেরিত ({len(tenders)} টি নতুন টেন্ডার)
+                    Automated alert triggered for newly discovered tenders ({len(tenders)} new tender notice(s))
                 </p>
             </div>
 
@@ -364,20 +397,21 @@ def send_instant_email(tenders):
                         </td>
                         <td style="width: 25%; text-align: right; vertical-align: middle;">
                             <a href="{t['link']}" target="_blank" style="background-color: #0d47a1; color: #ffffff; text-decoration: none; padding: 7px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; display: inline-block;">
-                                টেন্ডার দেখুন &rarr;
+                                View Tender &rarr;
                             </a>
                         </td>
                     </tr>
         """
         # Save to CSV immediately so it's NEVER sent twice
-        mark_as_seen(t['title'], t['link'], t['source'], score)
+        dedup_ref = t.get('dedup_key', t['link'])
+        mark_as_seen(t['title'], dedup_ref, t['source'], score)
 
     html_content += """
                 </table>
 
                 <br>
                 <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; font-size: 12px; color: #64748b; text-align: center;">
-                    এই ইমেইলটি SWIFT & Bank Tender Instant Alert Automation Engine থেকে স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে।
+                    This email was automatically generated and sent by the SWIFT & Banking Tender Alert Automation Engine.
                 </div>
             </div>
         </div>
@@ -415,7 +449,8 @@ def run_scan_cycle():
             verified_tenders.append(c)
         else:
             # Mark irrelevant notices in CSV so we don't re-crawl them
-            mark_as_seen(c['title'], c['link'], c['source'], eval_result.get('relevance_score', 0))
+            dedup_ref = c.get('dedup_key', c['link'])
+            mark_as_seen(c['title'], dedup_ref, c['source'], eval_result.get('relevance_score', 0))
 
     if verified_tenders:
         send_instant_email(verified_tenders)

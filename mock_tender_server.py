@@ -12,7 +12,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
 if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
 
-PORT = 5000
+PORT = int(os.getenv("PORT", 5000))
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mock_tenders.json")
 
 def load_tenders():
